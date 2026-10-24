@@ -32,6 +32,9 @@ jobs:
       - name: Install build tools
         run: brew install cmake xcodegen
 
+      - name: Create local.properties
+        run: touch local.properties
+
       - name: Build shared framework
         run: ./scripts/build-shared-framework.sh
 
