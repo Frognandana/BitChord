@@ -1,0 +1,67 @@
+
+name: Build BitChord iOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,aarch64-apple-ios,aarch64-apple-ios-sim
+
+      - name: Install build tools
+        run: brew install cmake xcodegen
+
+      - name: Build shared framework
+        run: ./scripts/build-shared-framework.sh
+
+      - name: Build native audio engine
+        run: ./scripts/build-native-core.sh
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec AppleApp/project.yml
+
+      - name: Build iOS app
+        run: |
+          xcodebuild \
+            -project AppleApp/BitChord.xcodeproj \
+            -scheme BitChord \
+            -sdk iphoneos \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/Payload
+          cp -R build/DerivedData/Build/Products/Debug-iphoneos/BitChord.app build/Payload/
+          cd build
+          zip -qr BitChord-unsigned.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: BitChord-unsigned-IPA
+          path: build/BitChord-unsigned.ipa
