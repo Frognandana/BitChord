@@ -16,12 +16,17 @@ import kotlin.coroutines.resume
 /** Native WebKit attestation, matching upstream's hidden BotGuard WebView. */
 @OptIn(ExperimentalAtomicApi::class)
 object PlaybackTokenBridge {
-    interface Provider { fun generate(videoId: String, visitorData: String, callback: TokenCallback) }
+    interface Provider {
+        fun generate(videoId: String, visitorData: String, callback: TokenCallback)
+        /** Forget the minter, so the next token comes from a fresh challenge. */
+        fun invalidate()
+    }
     fun interface TokenCallback { fun onResult(playerToken: String?, streamingToken: String?) }
     fun interface ChallengeCallback { fun onResult(json: String?, message: String?) }
     private val native = AtomicReference<Provider?>(null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     fun register(provider: Provider) { native.store(provider) }
+    fun invalidate() { native.load()?.invalidate() }
     internal fun tokenProvider(): TokenProvider = object : TokenProvider {
         override val capabilities: TokenProviderCapabilities
             get() = if (native.load() == null) TokenProviderCapabilities() else
@@ -29,7 +34,7 @@ object PlaybackTokenBridge {
         override suspend fun getPoToken(videoId: String, visitorData: String, cookie: String?): PoTokenResult? {
             val provider = native.load() ?: return null
             val generation = Innertube.sessionGeneration
-            return withTimeoutOrNull(8_000) {
+            return withTimeoutOrNull(30_000) {
                 suspendCancellableCoroutine { continuation ->
                     provider.generate(videoId, visitorData) { player, streaming ->
                         if (continuation.isActive) continuation.resume(
@@ -48,7 +53,7 @@ object PlaybackTokenBridge {
     fun challenge(botguardResponse: String?, callback: ChallengeCallback) {
         scope.launch {
             try {
-                val response = withTimeout(8_000) {
+                val response = withTimeout(15_000) {
                     Http.client.post("https://www.youtube.com/api/jnn/v1/" + if (botguardResponse == null) "Create" else "GenerateIT") {
                         contentType(ContentType("application", "json+protobuf"))
                         header("Accept", "application/json")
