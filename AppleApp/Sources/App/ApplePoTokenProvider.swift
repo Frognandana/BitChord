@@ -18,17 +18,29 @@ final class ApplePoTokenProvider: NSObject, PlaybackTokenBridgeProvider, WKNavig
         Task { @MainActor in
             let result = Completion(callback)
             let work = Task {
+                var stage = "challenge bootstrap"
                 do {
                     let streaming = try await self.prepare(visitor: visitorData)
+                    stage = "video-bound token"
                     let player = try await self.mint(videoId)
                     result.finish(player, streaming)
-                } catch { result.finish(nil, nil) }
+                } catch {
+                    PlaybackDebugLog.shared.record(
+                        "YouTube PoToken generation failed during \(stage) (\(String(describing: type(of: error))))"
+                    )
+                    result.finish(nil, nil)
+                }
             }
             Task {
-                try? await Task.sleep(for: .seconds(8))
+                try? await Task.sleep(for: .seconds(30))
                 if result.finish(nil, nil) { work.cancel() }
             }
         }
+    }
+
+    /// The next token is minted from a fresh challenge rather than the cached minter.
+    nonisolated func invalidate() {
+        Task { @MainActor in self.expires = .distantPast }
     }
 
     private final class Completion {
