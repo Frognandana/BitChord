@@ -52,7 +52,7 @@ internal class PlayerClientDirector(
 
     private companion object {
         private const val TAG = "PlayerClientDirector"
-        private const val PO_TOKEN_FETCH_TIMEOUT_MS = 18_000L
+        private const val PO_TOKEN_FETCH_TIMEOUT_MS = 35_000L
         private const val DEFAULT_PLAYER_REQUEST_TIMEOUT_MS = 8_000L
         private const val DEFAULT_VISITOR_DATA_FETCH_TIMEOUT_MS = 8_000L
         private val DEFAULT_MAX_PLAYER_REQUESTS = PlaybackClientCatalog.automaticManifests.size * 2
